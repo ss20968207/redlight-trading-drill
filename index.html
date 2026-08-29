@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>紅綠燈交易訓練所</title>
+<meta name="description" content="用虛擬資金練習紅綠燈搭配 3+1／馬刺進場訊號的紀律與資金管理，體驗約 70% 勝率組合的實際樣貌。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1c1a1d;
+    --panel: #252226;
+    --panel-2: #2c282c;
+    --screen: #14120f;
+    --border: #3d383a;
+    --border-soft: #332f32;
+    --text: #f2efe9;
+    --muted: #9c948f;
+    --muted-2: #6f6a68;
+    --red: #e2483d;
+    --red-soft: rgba(226, 72, 61, 0.14);
+    --green: #3fae58;
+    --green-soft: rgba(63, 174, 88, 0.14);
+    --amber: #e8a33d;
+    --amber-dim: #8a5f22;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(232, 163, 61, 0.06), transparent),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    color: var(--text);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 40px 16px 64px;
+    min-height: 100vh;
+  }
+
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .display { font-family: "Big Shoulders Display", "Noto Sans TC", sans-serif; }
+
+  .wrap { max-width: 560px; margin: 0 auto; }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted-2);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .eyebrow .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .topbar .eyebrow { margin-bottom: 0; }
+  .ig-watermark { font-size: 11px; letter-spacing: 0.03em; color: var(--muted-2); user-select: none; }
+
+  .housing {
+    background: linear-gradient(180deg, var(--panel) 0%, #201d20 100%);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 -1px 0 rgba(0,0,0,0.5) inset,
+      0 24px 60px -20px rgba(0,0,0,0.7),
+      0 4px 16px rgba(0,0,0,0.4);
+    padding: 22px;
+    position: relative;
+  }
+
+  /* corner rivets, a small physical-hardware detail */
+  .housing::before, .housing::after,
+  .housing .rivet-tr, .housing .rivet-bl {
+    content: "";
+    position: absolute;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: #0f0d0f;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .housing::before { top: 11px; left: 11px; }
+  .housing::after { bottom: 11px; right: 11px; }
+  .housing .rivet-tr { top: 11px; right: 11px; }
+  .housing .rivet-bl { bottom: 11px; left: 11px; }
+
+  .lamp-row { display: flex; justify-content: center; gap: 18px; padding: 4px 0 18px; }
+  .lamp {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #0f0d0f;
+    border: 1px solid #050405;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 5px rgba(0,0,0,0.5);
+    position: relative;
+  }
+  .lamp.lit-red { background: radial-gradient(circle at 35% 30%, #ff8a7e, var(--red) 55%, #8f1f17 100%); box-shadow: 0 0 16px 3px rgba(226,72,61,0.65), 0 1px 0 rgba(255,255,255,0.15) inset; }
+  .lamp.lit-green { background: radial-gradient(circle at 35% 30%, #a3f0b6, var(--green) 55%, #1f6b34 100%); box-shadow: 0 0 16px 3px rgba(63,174,88,0.65), 0 1px 0 rgba(255,255,255,0.15) inset; }
+  .lamp.lit-amber { background: radial-gradient(circle at 35% 30%, #ffd88f, var(--amber) 55%, #96631c 100%); box-shadow: 0 0 14px 3px rgba(232,163,61,0.55), 0 1px 0 rgba(255,255,255,0.15) inset; }
+
+  h1.title {
+    text-align: center;
+    font-family: "Big Shoulders Display", sans-serif;
+    font-weight: 800;
+    font-size: 30px;
+    letter-spacing: 0.02em;
+    text-wrap: balance;
+    margin: 0 0 4px;
+    color: var(--text);
+  }
+  p.subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin: 0 0 22px;
+    max-width: 420px;
+    margin-left: auto; margin-right: auto;
+  }
+
+  .rules { display: flex; flex-direction: column; gap: 10px; margin: 0 0 20px; }
+  .rule { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.65; color: #d8d4cd; }
+  .rule .num {
+    flex: none; width: 20px; height: 20px; border-radius: 4px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--amber); font-family: "JetBrains Mono", monospace; font-size: 11px;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+  }
+  .rule b.long { color: var(--green); }
+  .rule b.short { color: var(--red); }
+
+  .disclaimer { font-size: 11px; color: var(--muted-2); line-height: 1.6; margin: 14px 0; }
+
+  .btn-primary {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #f0b45a, var(--amber));
+    color: #241a08;
+    font-weight: 700; font-size: 14px;
+    border: 1px solid #b87a1f;
+    border-radius: 8px;
+    padding: 11px 22px;
+    cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 3px 0 var(--amber-dim), 0 6px 14px rgba(232,163,61,0.25);
+    transition: transform 0.08s ease;
+  }
+  .btn-primary:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 1px 0 var(--amber-dim); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+
+  .btn-row { display: flex; justify-content: center; margin-top: 4px; }
+
+  .best-score { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+
+  /* --- playing / revealed --- */
+  .statline { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .statline .cap { color: var(--text); font-weight: 700; }
+
+  .timer-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .led-row { display: flex; gap: 3px; flex: 1; }
+  .led { flex: 1; height: 5px; border-radius: 1px; background: #0f0d0f; border: 1px solid rgba(0,0,0,0.5); transition: background 0.2s; }
+  .led.on { background: var(--amber); box-shadow: 0 0 6px rgba(232,163,61,0.7); }
+  .led.on.low { background: var(--red); box-shadow: 0 0 6px rgba(226,72,61,0.7); }
+  .timer-label { flex: none; width: 28px; text-align: right; font-size: 11px; color: var(--muted-2); }
+  .timer-label.low { color: var(--red); }
+
+  .screen {
+    background: var(--screen);
+    border: 1px solid #050403;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5) inset;
+    padding: 16px;
+    margin-bottom: 18px;
+    color: #d7f5c8;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+  }
+  .screen .lbl { color: #5f8a55; }
+
+  .section-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .section { margin-bottom: 18px; }
+
+  .choice-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choice-btn {
+    flex: 1; min-width: 84px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 10px 12px;
+    color: var(--muted);
+    font-weight: 700; font-size: 13.5px;
+    cursor: pointer;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.35);
+    transition: all 0.1s ease;
+  }
+  .choice-btn:hover { color: var(--text); }
+  .choice-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+  .choice-btn.active-long { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+  .choice-btn.active-short { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+  .choice-btn.active-amber { background: rgba(232,163,61,0.14); border-color: var(--amber); color: var(--amber); }
+
+  .risk-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .risk-input {
+    width: 76px; background: var(--screen); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; color: var(--text);
+    font-family: "JetBrains Mono", monospace; font-size: 13px;
+  }
+  .risk-presets { display: flex; gap: 6px; }
+  .risk-preset { background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; padding: 5px 9px; color: var(--muted); font-size: 11px; cursor: pointer; }
+  .risk-preset:hover { color: var(--text); }
+  .risk-warn { color: var(--amber); font-size: 11px; }
+  .risk-suggest { color: var(--muted-2); font-size: 11px; margin-left: auto; }
+
+  /* --- reveal --- */
+  .reveal { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .timeout-note { color: var(--amber); font-size: 12px; font-weight: 700; }
+  .verdict-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+  .pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; }
+  .pill.correct { background: var(--green-soft); color: var(--green); }
+  .pill.wrong { background: var(--red-soft); color: var(--red); }
+  .reveal p { margin: 0; font-size: 13.5px; line-height: 1.65; color: #d8d4cd; }
+  .pnl-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .pnl-row .lbl { color: var(--muted); }
+  .pnl { font-family: "JetBrains Mono", monospace; font-weight: 700; }
+  .pnl.pos { color: var(--green); } .pnl.neg { color: var(--red); }
+  .cap-arrow { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 12px; }
+
+  /* --- finished --- */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-box { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; }
+  .stat-box .lbl { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .stat-box .val { font-family: "JetBrains Mono", monospace; font-size: 17px; font-weight: 700; color: var(--text); }
+  .stat-box .val.pos { color: var(--green); } .stat-box .val.neg { color: var(--red); }
+
+  .bust { color: var(--red); font-weight: 700; font-size: 13px; margin-bottom: 12px; }
+  .summary-note { font-size: 12.5px; color: var(--muted); line-height: 1.65; margin-bottom: 16px; }
+
+  .callout { border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; font-size: 13px; line-height: 1.65; }
+  .callout.pos { background: var(--green-soft); border: 1px solid rgba(63,174,88,0.4); }
+  .callout.pos .headline { color: var(--green); font-weight: 700; }
+  .callout.neg { background: var(--panel-2); border: 1px solid var(--border); }
+  .callout .headline { font-weight: 700; color: var(--text); }
+  .callout p { margin: 0; } .callout p + p { margin-top: 4px; color: var(--muted); }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 18px; }
+  table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 12px; }
+  thead { background: var(--panel-2); }
+  th { text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 600; font-size: 11px; }
+  td { padding: 7px 10px; border-top: 1px solid var(--border-soft); font-family: "JetBrains Mono", monospace; }
+  td.dim { color: var(--muted-2); font-family: "Noto Sans TC", sans-serif; }
+  td.win { color: var(--green); } td.lose { color: var(--red); }
+
+  .footer-note { text-align: center; font-size: 11px; color: var(--muted-2); margin-top: 28px; line-height: 1.6; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="eyebrow"><span class="dot"></span> 訊號執行模擬</div>
+    <span class="ig-watermark">@h.e.r_financialdiary</span>
+  </div>
+  <div class="housing" id="app">
+    <span class="rivet-tr"></span><span class="rivet-bl"></span>
+  </div>
+  <p class="footer-note">本遊戲僅供交易教學與練習使用，情境為模擬生成，不代表真實市場資料，不構成投資建議。</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- config ----
+  var RISK_REWARD_OPTIONS = [1, 1.5, 2, 3];
+  var STARTING_CAPITAL = 10000;
+  var ROUNDS_PER_GAME = 10;
+  var NO_SIGNAL_ROUNDS_PER_GAME = 3;
+  var CONFLICT_ROUNDS_PER_GAME = 2;
+  var SIGNAL_WIN_PROBABILITY = 0.7;
+  var SUGGESTED_RISK_PERCENT = 1;
+  var MIN_RISK_PERCENT = 0.1;
+  var MAX_RISK_PERCENT = 10;
+  var ANSWER_TIME_LIMIT_SECONDS = 12;
+  var SYMBOL = "BTC/USDT";
+  var SIGNAL_NAMES = ["3+1", "馬刺"];
+  var BEST_SCORE_KEY = "redlight-drill-best-return";
+
+  function lightLabel(dir) { return dir === "long" ? "綠燈" : "紅燈"; }
+  function directionLabel(dir) { return dir === "long" ? "做多" : "做空"; }
+  function answerLabel(a) { return a === "no_trade" ? "不下單" : directionLabel(a); }
+  // The fired signal's own stated direction is always authoritative — not the light. Most
+  // rounds agree; a minority of "conflict" rounds deliberately don't, to test whether the
+  // player trusts the signal itself over the light's color.
+  function correctAnswer(round) { return round.entryDirection === null ? "no_trade" : round.entryDirection; }
+
+  function buildRoundPrompt(round) {
+    if (round.signalName === null || round.entryDirection === null) {
+      return SYMBOL + " 今天日內偏見跳出" + lightLabel(round.biasDirection) + "，但目前沒有 3+1／馬刺 進場訊號出現。";
+    }
+    return SYMBOL + " 今天日內偏見跳出" + lightLabel(round.biasDirection) + "，" + round.signalName + " 出現" + directionLabel(round.entryDirection) + "訊號。";
+  }
+
+  function shuffle(items, random) {
+    var arr = items.slice();
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+  function alternating(count, values, random) {
+    var arr = [];
+    for (var i = 0; i < count; i++) arr.push(values[i % values.length]);
+    return shuffle(arr, random);
+  }
+
+  function generateGameRounds(count, random) {
+    random = random || Math.random;
+    var noSignalCount = Math.min(count, Math.round((count * NO_SIGNAL_ROUNDS_PER_GAME) / ROUNDS_PER_GAME));
+    var conflictCount = Math.min(count - noSignalCount, Math.round((count * CONFLICT_ROUNDS_PER_GAME) / ROUNDS_PER_GAME));
+    var alignedCount = count - noSignalCount - conflictCount;
+
+    var alignedDirections = alternating(alignedCount, ["long", "short"], random);
+    var alignedSignalNames = alternating(alignedCount, SIGNAL_NAMES, random);
+    var alignedRounds = [];
+    for (var i = 0; i < alignedCount; i++) {
+      alignedRounds.push({ id: "aligned-" + i, biasDirection: alignedDirections[i], signalName: alignedSignalNames[i], entryDirection: alignedDirections[i] });
+    }
+
+    var conflictLights = alternating(conflictCount, ["long", "short"], random);
+    var conflictSignalNames = alternating(conflictCount, SIGNAL_NAMES, random);
+    var conflictRounds = [];
+    for (var k = 0; k < conflictCount; k++) {
+      conflictRounds.push({ id: "conflict-" + k, biasDirection: conflictLights[k], signalName: conflictSignalNames[k], entryDirection: conflictLights[k] === "long" ? "short" : "long" });
+    }
+
+    var noSignalDirections = alternating(noSignalCount, ["long", "short"], random);
+    var noSignalRounds = [];
+    for (var j = 0; j < noSignalCount; j++) {
+      noSignalRounds.push({ id: "no-signal-" + j, biasDirection: noSignalDirections[j], signalName: null, entryDirection: null });
+    }
+
+    return shuffle(alignedRounds.concat(conflictRounds, noSignalRounds), random);
+  }
+
+  function resolveRound(input) {
+    var round = input.round, playerAnswer = input.playerAnswer, capitalBefore = input.capitalBefore;
+    var random = input.random || Math.random;
+    var correct = playerAnswer === correctAnswer(round);
+    var tradeTaken = playerAnswer !== "no_trade";
+
+    if (!tradeTaken) {
+      return {
+        round: round, playerAnswer: playerAnswer, correctAnswer: correctAnswer(round), correct: correct,
+        tradeTaken: false, riskRewardRatio: null, riskPercent: null, riskAmount: 0,
+        signalWon: null, won: false, pnl: 0, capitalBefore: capitalBefore, capitalAfter: capitalBefore
+      };
+    }
+
+    var riskRewardRatio = input.riskRewardRatio || 1;
+    var riskPercent = input.riskPercent || 0;
+    var riskAmount = Math.max(0, Math.min(capitalBefore, capitalBefore * (riskPercent / 100)));
+
+    var signalWon = correct ? (random() < SIGNAL_WIN_PROBABILITY) : null;
+    var won = signalWon === true;
+    var pnl = won ? riskAmount * riskRewardRatio : -riskAmount;
+    var capitalAfter = Math.max(0, capitalBefore + pnl);
+
+    return {
+      round: round, playerAnswer: playerAnswer, correctAnswer: correctAnswer(round), correct: correct,
+      tradeTaken: true, riskRewardRatio: riskRewardRatio, riskPercent: riskPercent, riskAmount: riskAmount,
+      signalWon: signalWon, won: won, pnl: pnl, capitalBefore: capitalBefore, capitalAfter: capitalAfter
+    };
+  }
+
+  function summarizeGame(rounds, startingCapital, roundsTotal) {
+    var endingCapital = rounds.length > 0 ? rounds[rounds.length - 1].capitalAfter : startingCapital;
+    var correctCount = rounds.filter(function (r) { return r.correct; }).length;
+    var tradesTaken = rounds.filter(function (r) { return r.tradeTaken; }).length;
+    var tradesWon = rounds.filter(function (r) { return r.won; }).length;
+    var noSignalRounds = rounds.filter(function (r) { return r.round.signalName === null; });
+    var disciplineHits = noSignalRounds.filter(function (r) { return !r.tradeTaken; }).length;
+
+    return {
+      startingCapital: startingCapital, endingCapital: endingCapital,
+      totalReturnPercent: ((endingCapital - startingCapital) / startingCapital) * 100,
+      roundsTotal: roundsTotal, roundsPlayed: rounds.length,
+      correctCount: correctCount, accuracyPercent: rounds.length > 0 ? (correctCount / rounds.length) * 100 : 0,
+      tradesTaken: tradesTaken, tradesWon: tradesWon,
+      actualWinRatePercent: tradesTaken > 0 ? (tradesWon / tradesTaken) * 100 : null,
+      noSignalRoundCount: noSignalRounds.length, disciplineHits: disciplineHits,
+      bustedOut: endingCapital <= 0 && rounds.length < roundsTotal
+    };
+  }
+
+  // ---- formatting ----
+  function fmtUsd(v) { return (v < 0 ? "-" : "") + "US$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function fmtSignedUsd(v) { return (v > 0 ? "+" : v < 0 ? "-" : "") + "US$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function fmtPercent(v, d) { d = d === undefined ? 2 : d; return (v > 0 ? "+" : "") + v.toFixed(d) + "%"; }
+  function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  function readBestReturn() {
+    try { var raw = window.localStorage.getItem(BEST_SCORE_KEY); return raw ? Number(raw) : null; } catch (e) { return null; }
+  }
+  function writeBestReturn(v) {
+    try { var cur = readBestReturn(); if (cur === null || v > cur) window.localStorage.setItem(BEST_SCORE_KEY, String(v)); } catch (e) {}
+  }
+
+  // ---- state ----
+  var state = {
+    phase: "intro",
+    rounds: [],
+    roundIndex: 0,
+    outcomes: [],
+    answer: null,
+    riskReward: null,
+    riskPercent: SUGGESTED_RISK_PERCENT,
+    timedOut: false,
+    secondsLeft: ANSWER_TIME_LIMIT_SECONDS,
+    timerHandle: null,
+    timerFired: false
+  };
+
+  function currentCapital() {
+    return state.outcomes.length > 0 ? state.outcomes[state.outcomes.length - 1].capitalAfter : STARTING_CAPITAL;
+  }
+  function currentRound() { return state.rounds[state.roundIndex]; }
+
+  function clearTimer() { if (state.timerHandle) { clearInterval(state.timerHandle); state.timerHandle = null; } }
+
+  function startTimer() {
+    clearTimer();
+    state.secondsLeft = ANSWER_TIME_LIMIT_SECONDS;
+    state.timerFired = false;
+    state.timerHandle = setInterval(function () {
+      state.secondsLeft = Math.max(0, state.secondsLeft - 1);
+      if (state.secondsLeft === 0 && !state.timerFired) {
+        state.timerFired = true;
+        clearTimer();
+        state.timedOut = true;
+        submitRound("no_trade");
+      }
+      renderTimerOnly();
+    }, 1000);
+  }
+
+  function startGame() {
+    state.rounds = generateGameRounds(ROUNDS_PER_GAME);
+    state.outcomes = [];
+    state.roundIndex = 0;
+    state.answer = null;
+    state.riskReward = null;
+    state.riskPercent = SUGGESTED_RISK_PERCENT;
+    state.timedOut = false;
+    state.phase = "playing";
+    render();
+    startTimer();
+  }
+
+  function submitRound(forced) {
+    var finalAnswer = forced || state.answer;
+    var round = currentRound();
+    if (!finalAnswer || !round || currentCapital() <= 0) return;
+    if (finalAnswer !== "no_trade" && !state.riskReward) return;
+    clearTimer();
+    var outcome = resolveRound({
+      round: round, playerAnswer: finalAnswer,
+      riskRewardRatio: state.riskReward, riskPercent: state.riskPercent,
+      capitalBefore: currentCapital()
+    });
+    state.outcomes.push(outcome);
+    state.phase = "revealed";
+    render();
+  }
+
+  function goNext() {
+    var last = state.outcomes[state.outcomes.length - 1];
+    if (last.capitalAfter <= 0 || state.roundIndex + 1 >= state.rounds.length) {
+      var summary = summarizeGame(state.outcomes, STARTING_CAPITAL, ROUNDS_PER_GAME);
+      writeBestReturn(summary.totalReturnPercent);
+      state.phase = "finished";
+      render();
+      return;
+    }
+    state.roundIndex += 1;
+    state.answer = null;
+    state.riskReward = null;
+    state.timedOut = false;
+    state.phase = "playing";
+    render();
+    startTimer();
+  }
+
+  // ---- render ----
+  var app = document.getElementById("app");
+
+  function renderTimerOnly() {
+    var bar = document.getElementById("led-row");
+    var label = document.getElementById("timer-label");
+    if (!bar || !label) return;
+    var total = ANSWER_TIME_LIMIT_SECONDS;
+    var on = state.secondsLeft;
+    var low = state.secondsLeft <= 4;
+    var html = "";
+    for (var i = 0; i < total; i++) {
+      var lit = i < on;
+      html += '<div class="led' + (lit ? (low ? " on low" : " on") : "") + '"></div>';
+    }
+    bar.innerHTML = html;
+    label.textContent = state.secondsLeft + "s";
+    label.className = "timer-label mono" + (low ? " low" : "");
+  }
+
+  function lampRow(activeColor) {
+    // activeColor: 'red' | 'green' | null (amber pulses gently as the idle/system lamp)
+    return '<div class="lamp-row">' +
+      '<div class="lamp' + (activeColor === "red" ? " lit-red" : "") + '"></div>' +
+      '<div class="lamp lit-amber" style="opacity:' + (activeColor ? "0.35" : "1") + '"></div>' +
+      '<div class="lamp' + (activeColor === "green" ? " lit-green" : "") + '"></div>' +
+      "</div>";
+  }
+
+  function renderIntro() {
+    var best = readBestReturn();
+    app.innerHTML =
+      '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
+      lampRow(null) +
+      '<h1 class="title">紅綠燈交易訓練所</h1>' +
+      '<p class="subtitle">用虛擬資金練習紅綠燈搭配 3+1／馬刺進場訊號的紀律與資金管理，體驗約 70% 勝率組合的實際樣貌。</p>' +
+      '<div class="rules">' +
+        '<div class="rule"><span class="num mono">1</span><span>你有 <b class="mono">' + fmtUsd(STARTING_CAPITAL) + "</b> 虛擬資金，共 " + ROUNDS_PER_GAME + " 題，每題限時 " + ANSWER_TIME_LIMIT_SECONDS + ' 秒作答。</span></div>' +
+        '<div class="rule"><span class="num mono">2</span><span>每題會直接告訴你：今天紅綠燈跳出什麼燈號、3+1 或馬刺出現了什麼方向的訊號——就跟看盤軟體上跳出來的一樣。</span></div>' +
+        '<div class="rule"><span class="num mono">3</span><span>要下單的話，選盈虧比、拿本金的幾 % 去冒險（教學建議：單筆風險 1%）；時間到還沒送出，系統會自動當你選「不下單」。</span></div>' +
+        '<div class="rule"><span class="num mono">4</span><span>跟著訊號選<b class="long">正確方向</b>：這類訊號歷史勝率約 ' + fmtPercent(SIGNAL_WIN_PROBABILITY * 100, 0) + '，系統會依這個機率幫你擲骰決定這筆賺或賠。</span></div>' +
+      "</div>" +
+      (best !== null ? '<p class="best-score">歷史最佳報酬率：' + fmtPercent(best) + "</p>" : "") +
+      '<div class="btn-row"><button class="btn-primary" id="start-btn">開始遊戲</button></div>';
+    document.getElementById("start-btn").onclick = startGame;
+  }
+
+  // The light shows the round's real bias color regardless of whether a signal fired — a
+  // no-signal round is "light on, no entry trigger yet", not "light off".
+  function roundLampColor(round) { return round.biasDirection === "long" ? "green" : "red"; }
+
+  function renderPlaying() {
+    var round = currentRound();
+    var cap = currentCapital();
+
+    var html =
+      '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
+      lampRow(roundLampColor(round)) +
+      '<div class="statline"><span>第 ' + (state.roundIndex + 1) + " / " + state.rounds.length + ' 題</span><span>目前資金：<span class="cap mono">' + fmtUsd(cap) + "</span></span></div>" +
+      '<div class="timer-wrap"><div id="led-row" class="led-row"></div><span id="timer-label" class="timer-label mono"></span></div>' +
+      '<div class="screen"><span class="lbl">&gt;</span> ' + esc(buildRoundPrompt(round)) + "</div>" +
+      '<div class="section"><div class="section-label">你要怎麼做？</div><div class="choice-row" id="answer-row">' +
+        '<button class="choice-btn" data-answer="long">做多</button>' +
+        '<button class="choice-btn" data-answer="short">做空</button>' +
+        '<button class="choice-btn" data-answer="no_trade">不下單</button>' +
+      "</div></div>" +
+      '<div id="trade-detail"></div>' +
+      '<div class="btn-row" style="justify-content:flex-start"><button class="btn-primary" id="submit-btn" disabled>送出判斷</button></div>';
+
+    app.innerHTML = html;
+    renderTimerOnly();
+
+    var answerBtns = app.querySelectorAll("#answer-row .choice-btn");
+    answerBtns.forEach(function (btn) {
+      btn.onclick = function () {
+        state.answer = btn.getAttribute("data-answer");
+        renderTradeDetail();
+        answerBtns.forEach(function (b) { b.className = "choice-btn"; });
+        var tone = state.answer === "long" ? "active-long" : state.answer === "short" ? "active-short" : "active-amber";
+        btn.className = "choice-btn " + tone;
+        updateSubmitEnabled();
+      };
+    });
+
+    document.getElementById("submit-btn").onclick = function () { submitRound(); };
+    renderTradeDetail();
+  }
+
+  function updateSubmitEnabled() {
+    var btn = document.getElementById("submit-btn");
+    if (!btn) return;
+    var needsRR = state.answer === "long" || state.answer === "short";
+    btn.disabled = !state.answer || (needsRR && !state.riskReward);
+  }
+
+  function renderTradeDetail() {
+    var container = document.getElementById("trade-detail");
+    if (!container) return;
+    if (state.answer !== "long" && state.answer !== "short") {
+      container.innerHTML = "";
+      updateSubmitEnabled();
+      return;
+    }
+    var rrButtons = RISK_REWARD_OPTIONS.map(function (rr) {
+      var active = state.riskReward === rr ? "active-amber" : "";
+      return '<button class="choice-btn ' + active + '" data-rr="' + rr + '">1 : ' + rr + "</button>";
+    }).join("");
+
+    container.innerHTML =
+      '<div class="section"><div class="section-label">這筆交易的盈虧比（停利：停損）</div><div class="choice-row" id="rr-row">' + rrButtons + "</div></div>" +
+      '<div class="section"><div class="section-label" style="display:flex;justify-content:space-between"><span>這筆要冒多少風險（本金的 %）</span><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted-2)">教學建議 ' + SUGGESTED_RISK_PERCENT + "%</span></div>" +
+        '<div class="risk-row">' +
+          '<input type="number" class="risk-input mono" id="risk-input" min="' + MIN_RISK_PERCENT + '" max="' + MAX_RISK_PERCENT + '" step="0.1" value="' + state.riskPercent + '">' +
+          '<span style="color:var(--muted);font-size:13px">%</span>' +
+          '<div class="risk-presets">' +
+            [1, 2, 3].map(function (p) { return '<button class="risk-preset" data-preset="' + p + '">' + p + "%</button>"; }).join("") +
+          "</div>" +
+          (state.riskPercent > 3 ? '<span class="risk-warn">風險偏高，教學建議是 1%</span>' : "") +
+        "</div>" +
+      "</div>";
+
+    container.querySelectorAll("#rr-row .choice-btn").forEach(function (btn) {
+      btn.onclick = function () {
+        state.riskReward = Number(btn.getAttribute("data-rr"));
+        renderTradeDetail();
+      };
+    });
+    var input = document.getElementById("risk-input");
+    input.oninput = function () {
+      var v = Number(input.value);
+      if (isFinite(v)) state.riskPercent = Math.min(MAX_RISK_PERCENT, Math.max(MIN_RISK_PERCENT, v));
+      updateSubmitEnabled();
+    };
+    container.querySelectorAll(".risk-preset").forEach(function (btn) {
+      btn.onclick = function () { state.riskPercent = Number(btn.getAttribute("data-preset")); renderTradeDetail(); };
+    });
+    updateSubmitEnabled();
+  }
+
+  function renderRevealed() {
+    var round = currentRound();
+    var outcome = state.outcomes[state.outcomes.length - 1];
+    var cap = outcome.capitalAfter;
+    var lampColor = roundLampColor(round);
+
+    var bodyText;
+    if (!outcome.tradeTaken) {
+      bodyText = outcome.correct
+        ? "沒有訊號，忍住不下單——沒有虧損，也沒有機會成本。"
+        : "這題其實有訊號，沒下單只是錯過一次機會，沒有實際虧損。";
+    } else if (outcome.correct) {
+      bodyText = "方向一致，這筆交易 <b style=\"color:" + (outcome.won ? "var(--green)" : "var(--red)") + "\">" + (outcome.won ? "獲利" : "觸及停損") + "</b>（盈虧比 1:" + outcome.riskRewardRatio + "，風險 " + outcome.riskPercent + "%）。";
+    } else {
+      bodyText = (outcome.correctAnswer === "no_trade" ? "根本沒有訊號，硬凹進場" : "方向不同") + "，這筆直接算虧損。";
+    }
+
+    var html =
+      '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
+      lampRow(lampColor) +
+      '<div class="statline"><span>第 ' + (state.roundIndex + 1) + " / " + state.rounds.length + ' 題</span><span>目前資金：<span class="cap mono">' + fmtUsd(cap) + "</span></span></div>" +
+      '<div class="screen"><span class="lbl">&gt;</span> ' + esc(buildRoundPrompt(round)) + "</div>" +
+      '<div class="reveal">' +
+        (state.timedOut ? '<div class="timeout-note">時間到，系統自動當你選了「不下單」。</div>' : "") +
+        '<div class="verdict-row"><span class="pill ' + (outcome.correct ? "correct" : "wrong") + '">' + (outcome.correct ? "判斷正確" : "判斷錯誤") + "</span>" +
+          '<span style="color:var(--muted)">你選了 <b style="color:var(--text)">' + answerLabel(outcome.playerAnswer) + "</b>，正確答案是 <b style=\"color:var(--text)\">" + answerLabel(outcome.correctAnswer) + "</b></span></div>" +
+        "<p>" + bodyText + "</p>" +
+        '<div class="pnl-row"><span class="lbl">損益</span><span class="pnl ' + (outcome.pnl >= 0 ? "pos" : "neg") + '">' + fmtSignedUsd(outcome.pnl) + '</span><span class="cap-arrow">' + fmtUsd(outcome.capitalBefore) + " &rarr; " + fmtUsd(outcome.capitalAfter) + "</span></div>" +
+        '<div class="btn-row" style="justify-content:flex-start"><button class="btn-primary" id="next-btn">' + (outcome.capitalAfter <= 0 ? "查看結算" : "下一題") + "</button></div>" +
+      "</div>";
+
+    app.innerHTML = html;
+    document.getElementById("next-btn").onclick = goNext;
+  }
+
+  function renderFinished() {
+    var summary = summarizeGame(state.outcomes, STARTING_CAPITAL, ROUNDS_PER_GAME);
+    var rows = state.outcomes.map(function (o, i) {
+      return "<tr><td class=\"dim\">" + (i + 1) + "</td>" +
+        "<td class=\"dim\">" + (o.round.signalName || "無訊號") + "</td>" +
+        "<td>" + answerLabel(o.correctAnswer) + "</td>" +
+        "<td class=\"" + (o.correct ? "win" : "lose") + "\">" + answerLabel(o.playerAnswer) + "</td>" +
+        "<td class=\"dim\">" + (o.riskRewardRatio ? "1:" + o.riskRewardRatio : "&mdash;") + "</td>" +
+        "<td class=\"" + (o.pnl >= 0 ? "win" : "lose") + "\">" + fmtSignedUsd(o.pnl) + "</td>" +
+        "<td>" + fmtUsd(o.capitalAfter) + "</td></tr>";
+    }).join("");
+
+    var disciplineNote = summary.noSignalRoundCount > 0
+      ? " 這局有 " + summary.noSignalRoundCount + " 題根本沒有訊號，你忍住不下單的有 " + summary.disciplineHits + " 題。"
+      : "";
+
+    var html =
+      '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
+      lampRow(summary.totalReturnPercent >= 0 ? "green" : "red") +
+      '<h1 class="title" style="font-size:24px">結算</h1>' +
+      (summary.bustedOut ? '<p class="bust">資金歸零，提前出局——這就是重倉的真實代價。</p>' : "") +
+      '<div class="stat-grid">' +
+        '<div class="stat-box"><div class="lbl">最終資金</div><div class="val">' + fmtUsd(summary.endingCapital) + "</div></div>" +
+        '<div class="stat-box"><div class="lbl">總報酬率</div><div class="val ' + (summary.totalReturnPercent >= 0 ? "pos" : "neg") + '">' + fmtPercent(summary.totalReturnPercent) + "</div></div>" +
+        '<div class="stat-box"><div class="lbl">判斷正確率</div><div class="val">' + summary.correctCount + "/" + summary.roundsPlayed + " (" + fmtPercent(summary.accuracyPercent, 0) + ")</div></div>" +
+        '<div class="stat-box"><div class="lbl">實際觸發交易勝率</div><div class="val">' + (summary.actualWinRatePercent === null ? "無交易" : fmtPercent(summary.actualWinRatePercent, 0)) + "</div></div>" +
+      "</div>" +
+      '<p class="summary-note">教科書上紅綠燈＋3+1／馬刺組合的長期勝率約 ' + fmtPercent(SIGNAL_WIN_PROBABILITY * 100, 0) + "；" + summary.tradesTaken + " 題你跟著訊號進場，跟你的實際結果比較看看差多少——次數少的時候，運氣的影響本來就會比較大。" + disciplineNote + "</p>" +
+      (summary.totalReturnPercent > 0
+        ? '<div class="callout pos"><p class="headline">恭喜本金正成長，你很適合這樣的策略跟指標！</p><p>想領取指標，或想學習如何使用，直接私訊「想領取指標」。</p></div>'
+        : '<div class="callout neg"><p class="headline">沒關係，現在只是你還沒搞懂指標跟策略的運用。</p><p>我們的課程都有免費教學，學習完可以再來重新測驗，直接私訊「想學習系統化課程」。</p></div>') +
+      '<div class="table-wrap"><table><thead><tr><th>#</th><th>訊號</th><th>正確答案</th><th>你的判斷</th><th>盈虧比</th><th>損益</th><th>資金結餘</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+      '<div class="btn-row"><button class="btn-primary" id="restart-btn">重新挑戰</button></div>';
+
+    app.innerHTML = html;
+    document.getElementById("restart-btn").onclick = startGame;
+  }
+
+  function render() {
+    if (state.phase === "intro") renderIntro();
+    else if (state.phase === "playing") renderPlaying();
+    else if (state.phase === "revealed") renderRevealed();
+    else if (state.phase === "finished") renderFinished();
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
