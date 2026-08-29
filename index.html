@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>紅綠燈交易訓練所</title>
-<meta name="description" content="用虛擬資金練習紅綠燈搭配 3+1／馬刺進場訊號的紀律與資金管理，體驗約 70% 勝率組合的實際樣貌。">
+<meta name="description" content="用虛擬資金練習紅綠燈搭配 3+1／馬刺進場訊號的判斷力與資金管理。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -240,7 +240,6 @@
   .stat-box .val.pos { color: var(--green); } .stat-box .val.neg { color: var(--red); }
 
   .bust { color: var(--red); font-weight: 700; font-size: 13px; margin-bottom: 12px; }
-  .summary-note { font-size: 12.5px; color: var(--muted); line-height: 1.65; margin-bottom: 16px; }
 
   .callout { border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; font-size: 13px; line-height: 1.65; }
   .callout.pos { background: var(--green-soft); border: 1px solid rgba(63,174,88,0.4); }
@@ -287,7 +286,6 @@
   var ROUNDS_PER_GAME = 10;
   var NO_SIGNAL_ROUNDS_PER_GAME = 3;
   var CONFLICT_ROUNDS_PER_GAME = 2;
-  var SIGNAL_WIN_PROBABILITY = 0.7;
   var SUGGESTED_RISK_PERCENT = 1;
   var MIN_RISK_PERCENT = 0.1;
   var MAX_RISK_PERCENT = 10;
@@ -356,7 +354,6 @@
 
   function resolveRound(input) {
     var round = input.round, playerAnswer = input.playerAnswer, capitalBefore = input.capitalBefore;
-    var random = input.random || Math.random;
     var correct = playerAnswer === correctAnswer(round);
     var tradeTaken = playerAnswer !== "no_trade";
 
@@ -372,7 +369,9 @@
     var riskPercent = input.riskPercent || 0;
     var riskAmount = Math.max(0, Math.min(capitalBefore, capitalBefore * (riskPercent / 100)));
 
-    var signalWon = correct ? (random() < SIGNAL_WIN_PROBABILITY) : null;
+    // A correct call always wins now — no probability roll. Right direction, right execution,
+    // clean profit at the chosen risk/reward ratio; anything else is a straight loss.
+    var signalWon = correct ? true : null;
     var won = signalWon === true;
     var pnl = won ? riskAmount * riskRewardRatio : -riskAmount;
     var capitalAfter = Math.max(0, capitalBefore + pnl);
@@ -537,12 +536,12 @@
       '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
       lampRow(null) +
       '<h1 class="title">紅綠燈交易訓練所</h1>' +
-      '<p class="subtitle">用虛擬資金練習紅綠燈搭配 3+1／馬刺進場訊號的紀律與資金管理，體驗約 70% 勝率組合的實際樣貌。</p>' +
+      '<p class="subtitle">用虛擬資金練習紅綠燈搭配 3+1／馬刺進場訊號的判斷力與資金管理。</p>' +
       '<div class="rules">' +
         '<div class="rule"><span class="num mono">1</span><span>你有 <b class="mono">' + fmtUsd(STARTING_CAPITAL) + "</b> 虛擬資金，共 " + ROUNDS_PER_GAME + " 題，每題限時 " + ANSWER_TIME_LIMIT_SECONDS + ' 秒作答。</span></div>' +
         '<div class="rule"><span class="num mono">2</span><span>每題會直接告訴你：今天紅綠燈跳出什麼燈號、3+1 或馬刺出現了什麼方向的訊號——就跟看盤軟體上跳出來的一樣。</span></div>' +
         '<div class="rule"><span class="num mono">3</span><span>要下單的話，選盈虧比、拿本金的幾 % 去冒險（教學建議：單筆風險 1%）；時間到還沒送出，系統會自動當你選「不下單」。</span></div>' +
-        '<div class="rule"><span class="num mono">4</span><span>跟著訊號選<b class="long">正確方向</b>：這類訊號歷史勝率約 ' + fmtPercent(SIGNAL_WIN_PROBABILITY * 100, 0) + '，系統會依這個機率幫你擲骰決定這筆賺或賠。</span></div>' +
+        '<div class="rule"><span class="num mono">4</span><span>跟著訊號選<b class="long">正確方向</b>：這筆交易就照你選的盈虧比穩定獲利；選錯方向，或沒訊號硬凹進場，直接算虧損。</span></div>' +
       "</div>" +
       (best !== null ? '<p class="best-score">歷史最佳報酬率：' + fmtPercent(best) + "</p>" : "") +
       '<div class="btn-row"><button class="btn-primary" id="start-btn">開始遊戲</button></div>';
@@ -688,10 +687,6 @@
         "<td>" + fmtUsd(o.capitalAfter) + "</td></tr>";
     }).join("");
 
-    var disciplineNote = summary.noSignalRoundCount > 0
-      ? " 這局有 " + summary.noSignalRoundCount + " 題根本沒有訊號，你忍住不下單的有 " + summary.disciplineHits + " 題。"
-      : "";
-
     var html =
       '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
       lampRow(summary.totalReturnPercent >= 0 ? "green" : "red") +
@@ -703,7 +698,6 @@
         '<div class="stat-box"><div class="lbl">判斷正確率</div><div class="val">' + summary.correctCount + "/" + summary.roundsPlayed + " (" + fmtPercent(summary.accuracyPercent, 0) + ")</div></div>" +
         '<div class="stat-box"><div class="lbl">實際觸發交易勝率</div><div class="val">' + (summary.actualWinRatePercent === null ? "無交易" : fmtPercent(summary.actualWinRatePercent, 0)) + "</div></div>" +
       "</div>" +
-      '<p class="summary-note">教科書上紅綠燈＋3+1／馬刺組合的長期勝率約 ' + fmtPercent(SIGNAL_WIN_PROBABILITY * 100, 0) + "；" + summary.tradesTaken + " 題你跟著訊號進場，跟你的實際結果比較看看差多少——次數少的時候，運氣的影響本來就會比較大。" + disciplineNote + "</p>" +
       (summary.totalReturnPercent > 0
         ? '<div class="callout pos"><p class="headline">恭喜本金正成長，你很適合這樣的策略跟指標！</p><p>想領取指標，或想學習如何使用，直接私訊「想領取指標」。</p></div>'
         : '<div class="callout neg"><p class="headline">沒關係，現在只是你還沒搞懂指標跟策略的運用。</p><p>我們的課程都有免費教學，學習完可以再來重新測驗，直接私訊「想學習系統化課程」。</p></div>') +
