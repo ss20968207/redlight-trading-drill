@@ -297,10 +297,14 @@
   function lightLabel(dir) { return dir === "long" ? "綠燈" : "紅燈"; }
   function directionLabel(dir) { return dir === "long" ? "做多" : "做空"; }
   function answerLabel(a) { return a === "no_trade" ? "不下單" : directionLabel(a); }
-  // The fired signal's own stated direction is always authoritative — not the light. Most
-  // rounds agree; a minority of "conflict" rounds deliberately don't, to test whether the
-  // player trusts the signal itself over the light's color.
-  function correctAnswer(round) { return round.entryDirection === null ? "no_trade" : round.entryDirection; }
+  // A fired signal is only tradeable when it agrees with the light. No signal at all, or a
+  // signal that fires against the light (e.g. 紅燈 but a long-firing signal), both mean the
+  // correct move is to sit out — the setup isn't valid either way.
+  function isConflictRound(round) { return round.signalName !== null && round.entryDirection !== round.biasDirection; }
+  function correctAnswer(round) {
+    if (round.entryDirection === null || isConflictRound(round)) return "no_trade";
+    return round.entryDirection;
+  }
 
   function buildRoundPrompt(round) {
     if (round.signalName === null || round.entryDirection === null) {
@@ -646,15 +650,22 @@
     var cap = outcome.capitalAfter;
     var lampColor = roundLampColor(round);
 
+    var conflict = isConflictRound(round);
     var bodyText;
     if (!outcome.tradeTaken) {
-      bodyText = outcome.correct
-        ? "沒有訊號，忍住不下單——沒有虧損，也沒有機會成本。"
-        : "這題其實有訊號，沒下單只是錯過一次機會，沒有實際虧損。";
+      if (outcome.correct) {
+        bodyText = conflict
+          ? "燈號跟訊號方向不一致，忍住不下單——沒有虧損，也沒有機會成本。"
+          : "沒有訊號，忍住不下單——沒有虧損，也沒有機會成本。";
+      } else {
+        bodyText = "這題其實有訊號，沒下單只是錯過一次機會，沒有實際虧損。";
+      }
     } else if (outcome.correct) {
-      bodyText = "方向一致，這筆交易 <b style=\"color:" + (outcome.won ? "var(--green)" : "var(--red)") + "\">" + (outcome.won ? "獲利" : "觸及停損") + "</b>（盈虧比 1:" + outcome.riskRewardRatio + "，風險 " + outcome.riskPercent + "%）。";
+      bodyText = "方向一致，這筆交易 <b style=\"color:var(--green)\">獲利</b>（盈虧比 1:" + outcome.riskRewardRatio + "，風險 " + outcome.riskPercent + "%）。";
+    } else if (conflict) {
+      bodyText = "燈號跟訊號方向不一致，這種情況不該進場，硬凹算虧損。";
     } else {
-      bodyText = (outcome.correctAnswer === "no_trade" ? "根本沒有訊號，硬凹進場" : "方向不同") + "，這筆直接算虧損。";
+      bodyText = (round.signalName === null ? "根本沒有訊號，硬凹進場" : "方向不同") + "，這筆直接算虧損。";
     }
 
     var html =
