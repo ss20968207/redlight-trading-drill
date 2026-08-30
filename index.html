@@ -175,6 +175,8 @@
     letter-spacing: 0.01em;
   }
   .screen .lbl { color: #5f8a55; }
+  .screen.chart-screen { padding: 10px 8px 4px; }
+  .screen.chart-screen svg { display: block; }
 
   .section-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
   .section { margin-bottom: 18px; }
@@ -260,37 +262,43 @@
   "use strict";
 
   // ---- config ----
-  // One decision per round now: 做多 / 做空 / 不下單. Risk/reward and position size used to be
-  // separate choices too, which was too much at once for a first-time player — they're fixed
-  // now so the only thing left to learn is reading the signal.
+  // One decision per round: given two real candles, is the THIRD candle 陽K (green) or 陰K
+  // (red)? Risk/reward and position size are fixed, same as before — the only thing to learn
+  // is reading the pattern.
   var STARTING_CAPITAL = 10000;
   var ROUNDS_PER_GAME = 10;
-  var NO_SIGNAL_ROUNDS_PER_GAME = 3;
-  var CONFLICT_ROUNDS_PER_GAME = 2;
   var FIXED_RISK_REWARD_RATIO = 2;
   var FIXED_RISK_PERCENT = 1;
-  var SYMBOL = "BTC/USDT";
-  var SIGNAL_NAMES = ["3+1", "馬刺"];
   var BEST_SCORE_KEY = "redlight-drill-best-return";
 
-  function lightLabel(dir) { return dir === "long" ? "綠燈" : "紅燈"; }
-  function directionLabel(dir) { return dir === "long" ? "做多" : "做空"; }
-  function answerLabel(a) { return a === "no_trade" ? "不下單" : directionLabel(a); }
-  // A fired signal is only tradeable when it agrees with the light. No signal at all, or a
-  // signal that fires against the light (e.g. 紅燈 but a long-firing signal), both mean the
-  // correct move is to sit out — the setup isn't valid either way.
-  function isConflictRound(round) { return round.signalName !== null && round.entryDirection !== round.biasDirection; }
-  function correctAnswer(round) {
-    if (round.entryDirection === null || isConflictRound(round)) return "no_trade";
-    return round.entryDirection;
+  function colorLabel(c) { return c === "green" ? "陽K" : "陰K"; }
+  function isBull(c) { return c.close > c.open; }
+  function isBear(c) { return c.close < c.open; }
+
+  // The actual rule (kept out of the visible UI copy on purpose — see per-round reveal text
+  // instead, which explains the specific instance without spelling out the general formula):
+  // two same-color candles where the second clears the first's high/low -> third continues;
+  // two same-color candles that don't clear it -> third flips; two different-color candles
+  // (a reversal already happened) -> third just follows the second candle's color.
+  function predictThirdColor(A, B) {
+    if (isBull(A) && isBull(B)) return B.close > A.high ? "green" : "red";
+    if (isBear(A) && isBear(B)) return B.close < A.low ? "red" : "green";
+    return isBull(B) ? "green" : "red";
   }
 
-  function buildRoundPrompt(round) {
-    if (round.signalName === null || round.entryDirection === null) {
-      return SYMBOL + " 今天日內偏見跳出" + lightLabel(round.biasDirection) + "，但目前沒有 3+1／馬刺 進場訊號出現。";
-    }
-    return SYMBOL + " 今天日內偏見跳出" + lightLabel(round.biasDirection) + "，" + round.signalName + " 出現" + directionLabel(round.entryDirection) + "訊號。";
-  }
+  var CATEGORY_LABELS = {
+    "green-breakout": "延續（有效）", "green-no-breakout": "延續（失敗）",
+    "red-breakout": "延續（有效）", "red-no-breakout": "延續（失敗）",
+    "reversal-to-red": "變盤", "reversal-to-green": "變盤"
+  };
+  var CATEGORY_EXPLANATIONS = {
+    "green-breakout": "前兩根都收漲，且這一根收盤價創了新高，突破前一根的最高點——延續力道還在，第三根通常是",
+    "green-no-breakout": "前兩根都收漲，但這一根沒有收在前一根最高點之上——動能不夠力，第三根容易翻成",
+    "red-breakout": "前兩根都收跌，且這一根收盤價跌破前一根的最低點——空方力道還在，第三根通常是",
+    "red-no-breakout": "前兩根都收跌，但這一根沒有跌破前一根最低點——空方動能不足，第三根容易翻成",
+    "reversal-to-red": "前一根收漲、這一根收跌，方向已經轉變——第三根通常會跟著最新這根走，是",
+    "reversal-to-green": "前一根收跌、這一根收漲，方向已經轉變——第三根通常會跟著最新這根走，是"
+  };
 
   function shuffle(items, random) {
     var arr = items.slice();
@@ -300,90 +308,98 @@
     }
     return arr;
   }
-  function alternating(count, values, random) {
-    var arr = [];
-    for (var i = 0; i < count; i++) arr.push(values[i % values.length]);
-    return shuffle(arr, random);
+
+  function randRange(min, max, random) { return min + random() * (max - min); }
+
+  function makeCandle(open, close, random) {
+    var top = Math.max(open, close), bottom = Math.min(open, close);
+    var wickUp = (top - bottom) * randRange(0.15, 0.6, random) + randRange(0.2, 1.5, random);
+    var wickDown = (top - bottom) * randRange(0.15, 0.6, random) + randRange(0.2, 1.5, random);
+    return { open: open, close: close, high: top + wickUp, low: bottom - wickDown };
+  }
+
+  var CANDLE_CATEGORIES = ["green-breakout", "green-no-breakout", "red-breakout", "red-no-breakout", "reversal-to-red", "reversal-to-green"];
+
+  // Builds A/B to deliberately satisfy the named category, with randomized magnitude for
+  // variety. The round's correct answer is always re-derived from the actual candle data via
+  // predictThirdColor() below, never trusted from the category label directly.
+  function generateCandlePair(category, random) {
+    var base = randRange(100, 900, random);
+    var move = base * randRange(0.03, 0.08, random);
+    var A, B, room, extra;
+
+    if (category === "green-breakout" || category === "green-no-breakout") {
+      A = makeCandle(base, base + move, random);
+      if (category === "green-breakout") {
+        extra = Math.max(1, A.high - A.close) * randRange(0.2, 1.2, random) + 1;
+        B = makeCandle(A.close, A.high + extra, random);
+      } else {
+        // Real headroom only — never inflate this, or B.close could accidentally clear A.high
+        // and silently flip the round into a breakout despite the category name.
+        room = A.high - A.close;
+        B = makeCandle(A.close, A.close + randRange(room * 0.3, room * 0.85, random), random);
+      }
+    } else if (category === "red-breakout" || category === "red-no-breakout") {
+      A = makeCandle(base, base - move, random);
+      if (category === "red-breakout") {
+        extra = Math.max(1, A.close - A.low) * randRange(0.2, 1.2, random) + 1;
+        B = makeCandle(A.close, A.low - extra, random);
+      } else {
+        room = A.close - A.low;
+        B = makeCandle(A.close, A.close - randRange(room * 0.3, room * 0.85, random), random);
+      }
+    } else if (category === "reversal-to-red") {
+      A = makeCandle(base, base + move, random);
+      B = makeCandle(A.close, A.close - base * randRange(0.03, 0.08, random), random);
+    } else {
+      A = makeCandle(base, base - move, random);
+      B = makeCandle(A.close, A.close + base * randRange(0.03, 0.08, random), random);
+    }
+    return { A: A, B: B };
   }
 
   function generateGameRounds(count, random) {
     random = random || Math.random;
-    var noSignalCount = Math.min(count, Math.round((count * NO_SIGNAL_ROUNDS_PER_GAME) / ROUNDS_PER_GAME));
-    var conflictCount = Math.min(count - noSignalCount, Math.round((count * CONFLICT_ROUNDS_PER_GAME) / ROUNDS_PER_GAME));
-    var alignedCount = count - noSignalCount - conflictCount;
-
-    var alignedDirections = alternating(alignedCount, ["long", "short"], random);
-    var alignedSignalNames = alternating(alignedCount, SIGNAL_NAMES, random);
-    var alignedRounds = [];
-    for (var i = 0; i < alignedCount; i++) {
-      alignedRounds.push({ id: "aligned-" + i, biasDirection: alignedDirections[i], signalName: alignedSignalNames[i], entryDirection: alignedDirections[i] });
-    }
-
-    var conflictLights = alternating(conflictCount, ["long", "short"], random);
-    var conflictSignalNames = alternating(conflictCount, SIGNAL_NAMES, random);
-    var conflictRounds = [];
-    for (var k = 0; k < conflictCount; k++) {
-      conflictRounds.push({ id: "conflict-" + k, biasDirection: conflictLights[k], signalName: conflictSignalNames[k], entryDirection: conflictLights[k] === "long" ? "short" : "long" });
-    }
-
-    var noSignalDirections = alternating(noSignalCount, ["long", "short"], random);
-    var noSignalRounds = [];
-    for (var j = 0; j < noSignalCount; j++) {
-      noSignalRounds.push({ id: "no-signal-" + j, biasDirection: noSignalDirections[j], signalName: null, entryDirection: null });
-    }
-
-    return shuffle(alignedRounds.concat(conflictRounds, noSignalRounds), random);
+    var categories = [];
+    for (var i = 0; i < count; i++) categories.push(CANDLE_CATEGORIES[i % CANDLE_CATEGORIES.length]);
+    categories = shuffle(categories, random);
+    return categories.map(function (cat, i) {
+      var pair = generateCandlePair(cat, random);
+      return { id: "round-" + i, category: cat, A: pair.A, B: pair.B, correctColor: predictThirdColor(pair.A, pair.B) };
+    });
   }
 
   function resolveRound(input) {
     var round = input.round, playerAnswer = input.playerAnswer, capitalBefore = input.capitalBefore;
-    var correct = playerAnswer === correctAnswer(round);
-    var tradeTaken = playerAnswer !== "no_trade";
-
-    if (!tradeTaken) {
-      return {
-        round: round, playerAnswer: playerAnswer, correctAnswer: correctAnswer(round), correct: correct,
-        tradeTaken: false, riskRewardRatio: null, riskPercent: null, riskAmount: 0,
-        signalWon: null, won: false, pnl: 0, capitalBefore: capitalBefore, capitalAfter: capitalBefore
-      };
-    }
-
-    var riskRewardRatio = FIXED_RISK_REWARD_RATIO;
-    var riskPercent = FIXED_RISK_PERCENT;
+    var correct = playerAnswer === round.correctColor;
     // Fixed-dollar risk, not compounded: 1% is always 1% of the STARTING capital (e.g. always
     // $100 on a $10,000 game), never a shrinking/growing % of whatever capital is left.
-    var riskAmount = Math.max(0, Math.min(capitalBefore, STARTING_CAPITAL * (riskPercent / 100)));
-
-    // A correct call always wins now — no probability roll. Right direction, right execution,
-    // clean profit at the chosen risk/reward ratio; anything else is a straight loss.
-    var signalWon = correct ? true : null;
-    var won = signalWon === true;
-    var pnl = won ? riskAmount * riskRewardRatio : -riskAmount;
+    var riskAmount = Math.max(0, Math.min(capitalBefore, STARTING_CAPITAL * (FIXED_RISK_PERCENT / 100)));
+    var pnl = correct ? riskAmount * FIXED_RISK_REWARD_RATIO : -riskAmount;
     var capitalAfter = Math.max(0, capitalBefore + pnl);
 
     return {
-      round: round, playerAnswer: playerAnswer, correctAnswer: correctAnswer(round), correct: correct,
-      tradeTaken: true, riskRewardRatio: riskRewardRatio, riskPercent: riskPercent, riskAmount: riskAmount,
-      signalWon: signalWon, won: won, pnl: pnl, capitalBefore: capitalBefore, capitalAfter: capitalAfter
+      round: round, playerAnswer: playerAnswer, correctAnswer: round.correctColor, correct: correct,
+      riskRewardRatio: FIXED_RISK_REWARD_RATIO, riskPercent: FIXED_RISK_PERCENT, riskAmount: riskAmount,
+      won: correct, pnl: pnl, capitalBefore: capitalBefore, capitalAfter: capitalAfter
     };
   }
 
   function summarizeGame(rounds, startingCapital, roundsTotal) {
     var endingCapital = rounds.length > 0 ? rounds[rounds.length - 1].capitalAfter : startingCapital;
     var correctCount = rounds.filter(function (r) { return r.correct; }).length;
-    var tradesTaken = rounds.filter(function (r) { return r.tradeTaken; }).length;
-    var tradesWon = rounds.filter(function (r) { return r.won; }).length;
-    var noSignalRounds = rounds.filter(function (r) { return r.round.signalName === null; });
-    var disciplineHits = noSignalRounds.filter(function (r) { return !r.tradeTaken; }).length;
+    var longestStreak = 0, currentStreak = 0;
+    rounds.forEach(function (r) {
+      if (r.correct) { currentStreak += 1; longestStreak = Math.max(longestStreak, currentStreak); }
+      else { currentStreak = 0; }
+    });
 
     return {
       startingCapital: startingCapital, endingCapital: endingCapital,
       totalReturnPercent: ((endingCapital - startingCapital) / startingCapital) * 100,
       roundsTotal: roundsTotal, roundsPlayed: rounds.length,
       correctCount: correctCount, accuracyPercent: rounds.length > 0 ? (correctCount / rounds.length) * 100 : 0,
-      tradesTaken: tradesTaken, tradesWon: tradesWon,
-      actualWinRatePercent: tradesTaken > 0 ? (tradesWon / tradesTaken) * 100 : null,
-      noSignalRoundCount: noSignalRounds.length, disciplineHits: disciplineHits,
+      longestStreak: longestStreak,
       bustedOut: endingCapital <= 0 && rounds.length < roundsTotal
     };
   }
@@ -451,7 +467,9 @@
   var app = document.getElementById("app");
 
   function lampRow(activeColor) {
-    // activeColor: 'red' | 'green' | null (amber pulses gently as the idle/system lamp)
+    // activeColor: 'red' | 'green' | null (amber pulses gently as the idle/system lamp).
+    // During "playing" this always stays neutral (null) — lighting the real answer's color
+    // before the player commits would just be handing them the answer.
     return '<div class="lamp-row">' +
       '<div class="lamp' + (activeColor === "red" ? " lit-red" : "") + '"></div>' +
       '<div class="lamp lit-amber" style="opacity:' + (activeColor ? "0.35" : "1") + '"></div>' +
@@ -465,10 +483,10 @@
       '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
       lampRow(null) +
       '<h1 class="title">指標交易訓練所</h1>' +
-      '<p class="subtitle">用虛擬資金練習紅綠燈搭配 3+1／馬刺進場訊號的判斷力與資金管理。</p>' +
+      '<p class="subtitle">看兩根K棒，猜第三根是漲是跌——練習判斷力與資金管理。</p>' +
       '<div class="rules">' +
         '<div class="rule"><span class="num mono">1</span><span>你有 <b class="mono">' + fmtUsd(STARTING_CAPITAL) + "</b> 虛擬資金，共 " + ROUNDS_PER_GAME + ' 題。</span></div>' +
-        '<div class="rule"><span class="num mono">2</span><span>每題會直接告訴你：今天紅綠燈跳出什麼燈號、3+1 或馬刺出現了什麼方向的訊號——就跟看盤軟體上跳出來的一樣。你只需要決定<b class="long">做多</b>、<b class="short">做空</b>，還是<b>不下單</b>。</span></div>' +
+        '<div class="rule"><span class="num mono">2</span><span>每題會顯示連續兩根K棒，你要判斷<b>第三根</b>會是<b class="long">陽K（漲）</b>還是<b class="short">陰K（跌）</b>。</span></div>' +
         '<div class="rule"><span class="num mono">3</span><span>每筆固定用 1:' + FIXED_RISK_REWARD_RATIO + ' 盈虧比、風險本金 ' + FIXED_RISK_PERCENT + "%（" + fmtUsd(STARTING_CAPITAL * FIXED_RISK_PERCENT / 100) + '）。判斷對，穩定獲利；判斷錯，直接算虧損。</span></div>' +
       "</div>" +
       (best !== null ? '<p class="best-score">歷史最佳報酬率：' + fmtPercent(best) + "</p>" : "") +
@@ -476,9 +494,40 @@
     document.getElementById("start-btn").onclick = startGame;
   }
 
-  // The light shows the round's real bias color regardless of whether a signal fired — a
-  // no-signal round is "light on, no entry trigger yet", not "light off".
-  function roundLampColor(round) { return round.biasDirection === "long" ? "green" : "red"; }
+  function svgNum(n) { return Math.round(n * 100) / 100; }
+
+  // Draws the two given candles plus a dashed "?" placeholder for the one being predicted.
+  function buildCandleChart(round, revealColor) {
+    var A = round.A, B = round.B;
+    var width = 320, plotH = 168, padTop = 14, padBottom = 10, labelY = plotH + 18;
+    var lo = Math.min(A.low, B.low), hi = Math.max(A.high, B.high);
+    var span = Math.max(1e-6, hi - lo);
+    function y(price) { return padTop + (hi - price) / span * (plotH - padTop - padBottom); }
+    function candle(c, cx) {
+      var color = isBull(c) ? "#3fae58" : "#e2483d";
+      var top = y(Math.max(c.open, c.close)), bottom = y(Math.min(c.open, c.close));
+      var h = Math.max(5, bottom - top); // visual floor only — never affects which candle wins or the logic
+      return '<line x1="' + cx + '" y1="' + svgNum(y(c.high)) + '" x2="' + cx + '" y2="' + svgNum(y(c.low)) + '" stroke="' + color + '" stroke-width="2.5"/>' +
+        '<rect x="' + svgNum(cx - 23) + '" y="' + svgNum(top) + '" width="46" height="' + svgNum(h) + '" fill="' + color + '" rx="2"/>';
+    }
+    var cxA = 68, cxB = 160, cxQ = 252;
+    var midY = (y(Math.max(A.open, A.close, B.open, B.close)) + y(Math.min(A.open, A.close, B.open, B.close))) / 2;
+    var thirdBlock;
+    if (revealColor) {
+      var revColor = revealColor === "green" ? "#3fae58" : "#e2483d";
+      thirdBlock = '<rect x="' + (cxQ - 23) + '" y="' + svgNum(midY - 20) + '" width="46" height="40" fill="' + revColor + '" rx="2" opacity="0.85"/>' +
+        '<line x1="' + cxQ + '" y1="' + svgNum(midY - 32) + '" x2="' + cxQ + '" y2="' + svgNum(midY + 32) + '" stroke="' + revColor + '" stroke-width="2.5"/>';
+    } else {
+      thirdBlock = '<rect x="' + (cxQ - 23) + '" y="' + svgNum(midY - 20) + '" width="46" height="40" fill="none" stroke="#6f6a68" stroke-width="2" stroke-dasharray="5,4" rx="4"/>' +
+        '<text x="' + cxQ + '" y="' + svgNum(midY + 6) + '" text-anchor="middle" font-size="20" font-weight="700" fill="#8a8480">?</text>';
+    }
+    return '<svg viewBox="0 0 ' + width + " " + (plotH + 26) + '" width="100%" height="' + (plotH + 26) + '" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans TC, sans-serif">' +
+      candle(A, cxA) + candle(B, cxB) + thirdBlock +
+      '<text x="' + cxA + '" y="' + labelY + '" text-anchor="middle" font-size="11" fill="#6f6a68">前一根</text>' +
+      '<text x="' + cxB + '" y="' + labelY + '" text-anchor="middle" font-size="11" fill="#6f6a68">這一根</text>' +
+      '<text x="' + cxQ + '" y="' + labelY + '" text-anchor="middle" font-size="11" fill="#6f6a68">第三根？</text>' +
+      "</svg>";
+  }
 
   function renderPlaying() {
     var round = currentRound();
@@ -486,13 +535,12 @@
 
     var html =
       '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
-      lampRow(roundLampColor(round)) +
+      lampRow(null) +
       '<div class="statline"><span>第 ' + (state.roundIndex + 1) + " / " + state.rounds.length + ' 題</span><span>目前資金：<span class="cap mono">' + fmtUsd(cap) + "</span></span></div>" +
-      '<div class="screen"><span class="lbl">&gt;</span> ' + esc(buildRoundPrompt(round)) + "</div>" +
-      '<div class="section"><div class="section-label">你要怎麼做？</div><div class="choice-row" id="answer-row">' +
-        '<button class="choice-btn" data-answer="long">做多</button>' +
-        '<button class="choice-btn" data-answer="short">做空</button>' +
-        '<button class="choice-btn" data-answer="no_trade">不下單</button>' +
+      '<div class="screen chart-screen">' + buildCandleChart(round, null) + "</div>" +
+      '<div class="section"><div class="section-label">第三根會是？</div><div class="choice-row" id="answer-row">' +
+        '<button class="choice-btn" data-answer="green">陽K（漲）</button>' +
+        '<button class="choice-btn" data-answer="red">陰K（跌）</button>' +
       "</div></div>";
 
     app.innerHTML = html;
@@ -506,34 +554,21 @@
     var round = currentRound();
     var outcome = state.outcomes[state.outcomes.length - 1];
     var cap = outcome.capitalAfter;
-    var lampColor = roundLampColor(round);
 
-    var conflict = isConflictRound(round);
-    var bodyText;
-    if (!outcome.tradeTaken) {
-      if (outcome.correct) {
-        bodyText = conflict
-          ? "燈號跟訊號方向不一致，忍住不下單——沒有虧損，也沒有機會成本。"
-          : "沒有訊號，忍住不下單——沒有虧損，也沒有機會成本。";
-      } else {
-        bodyText = "這題其實有訊號，沒下單只是錯過一次機會，沒有實際虧損。";
-      }
-    } else if (outcome.correct) {
-      bodyText = "方向一致，這筆交易 <b style=\"color:var(--green)\">獲利</b>（盈虧比 1:" + outcome.riskRewardRatio + "，風險 " + outcome.riskPercent + "%）。";
-    } else if (conflict) {
-      bodyText = "燈號跟訊號方向不一致，這種情況不該進場，硬凹算虧損。";
-    } else {
-      bodyText = (round.signalName === null ? "根本沒有訊號，硬凹進場" : "方向不同") + "，這筆直接算虧損。";
-    }
+    var bodyText = CATEGORY_EXPLANATIONS[round.category] + "<b style=\"color:" +
+      (round.correctColor === "green" ? "var(--green)" : "var(--red)") + "\">" + colorLabel(round.correctColor) + "</b>。" +
+      (outcome.correct
+        ? " 你判斷對了，這筆交易 <b style=\"color:var(--green)\">獲利</b>（盈虧比 1:" + outcome.riskRewardRatio + "，風險 " + outcome.riskPercent + "%）。"
+        : " 這筆判斷錯誤，直接算虧損。");
 
     var html =
       '<span class="rivet-tr"></span><span class="rivet-bl"></span>' +
-      lampRow(lampColor) +
+      lampRow(round.correctColor) +
       '<div class="statline"><span>第 ' + (state.roundIndex + 1) + " / " + state.rounds.length + ' 題</span><span>目前資金：<span class="cap mono">' + fmtUsd(cap) + "</span></span></div>" +
-      '<div class="screen"><span class="lbl">&gt;</span> ' + esc(buildRoundPrompt(round)) + "</div>" +
+      '<div class="screen chart-screen">' + buildCandleChart(round, round.correctColor) + "</div>" +
       '<div class="reveal">' +
         '<div class="verdict-row"><span class="pill ' + (outcome.correct ? "correct" : "wrong") + '">' + (outcome.correct ? "判斷正確" : "判斷錯誤") + "</span>" +
-          '<span style="color:var(--muted)">你選了 <b style="color:var(--text)">' + answerLabel(outcome.playerAnswer) + "</b>，正確答案是 <b style=\"color:var(--text)\">" + answerLabel(outcome.correctAnswer) + "</b></span></div>" +
+          '<span style="color:var(--muted)">你選了 <b style="color:var(--text)">' + colorLabel(outcome.playerAnswer) + "</b>，正確答案是 <b style=\"color:var(--text)\">" + colorLabel(outcome.correctAnswer) + "</b></span></div>" +
         "<p>" + bodyText + "</p>" +
         '<div class="pnl-row"><span class="lbl">損益</span><span class="pnl ' + (outcome.pnl >= 0 ? "pos" : "neg") + '">' + fmtSignedUsd(outcome.pnl) + '</span><span class="cap-arrow">' + fmtUsd(outcome.capitalBefore) + " &rarr; " + fmtUsd(outcome.capitalAfter) + "</span></div>" +
         '<div class="btn-row" style="justify-content:flex-start"><button class="btn-primary" id="next-btn">' + (outcome.capitalAfter <= 0 ? "查看結算" : "下一題") + "</button></div>" +
@@ -547,10 +582,10 @@
     var summary = summarizeGame(state.outcomes, STARTING_CAPITAL, ROUNDS_PER_GAME);
     var rows = state.outcomes.map(function (o, i) {
       return "<tr><td class=\"dim\">" + (i + 1) + "</td>" +
-        "<td class=\"dim\">" + (o.round.signalName || "無訊號") + "</td>" +
-        "<td>" + answerLabel(o.correctAnswer) + "</td>" +
-        "<td class=\"" + (o.correct ? "win" : "lose") + "\">" + answerLabel(o.playerAnswer) + "</td>" +
-        "<td class=\"dim\">" + (o.riskRewardRatio ? "1:" + o.riskRewardRatio : "&mdash;") + "</td>" +
+        "<td class=\"dim\">" + CATEGORY_LABELS[o.round.category] + "</td>" +
+        "<td>" + colorLabel(o.correctAnswer) + "</td>" +
+        "<td class=\"" + (o.correct ? "win" : "lose") + "\">" + colorLabel(o.playerAnswer) + "</td>" +
+        "<td class=\"dim\">1:" + o.riskRewardRatio + "</td>" +
         "<td class=\"" + (o.pnl >= 0 ? "win" : "lose") + "\">" + fmtSignedUsd(o.pnl) + "</td>" +
         "<td>" + fmtUsd(o.capitalAfter) + "</td></tr>";
     }).join("");
@@ -564,12 +599,12 @@
         '<div class="stat-box"><div class="lbl">最終資金</div><div class="val">' + fmtUsd(summary.endingCapital) + "</div></div>" +
         '<div class="stat-box"><div class="lbl">總報酬率</div><div class="val ' + (summary.totalReturnPercent >= 0 ? "pos" : "neg") + '">' + fmtPercent(summary.totalReturnPercent) + "</div></div>" +
         '<div class="stat-box"><div class="lbl">判斷正確率</div><div class="val">' + summary.correctCount + "/" + summary.roundsPlayed + " (" + fmtPercent(summary.accuracyPercent, 0) + ")</div></div>" +
-        '<div class="stat-box"><div class="lbl">實際觸發交易勝率</div><div class="val">' + (summary.actualWinRatePercent === null ? "無交易" : fmtPercent(summary.actualWinRatePercent, 0)) + "</div></div>" +
+        '<div class="stat-box"><div class="lbl">最長連續答對</div><div class="val">' + summary.longestStreak + " 題</div></div>" +
       "</div>" +
       (summary.totalReturnPercent > 0
         ? '<div class="callout pos"><p class="headline">恭喜本金正成長，你很適合這樣的策略跟指標！</p><p>想領取指標，或想學習如何使用，直接私訊「想領取指標」。</p></div>'
         : '<div class="callout neg"><p class="headline">沒關係，現在只是你還沒搞懂指標跟策略的運用。</p><p>我們的課程都有免費教學，學習完可以再來重新測驗，直接私訊「想學習系統化課程」。</p></div>') +
-      '<div class="table-wrap"><table><thead><tr><th>#</th><th>訊號</th><th>正確答案</th><th>你的判斷</th><th>盈虧比</th><th>損益</th><th>資金結餘</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+      '<div class="table-wrap"><table><thead><tr><th>#</th><th>型態</th><th>正確答案</th><th>你的判斷</th><th>盈虧比</th><th>損益</th><th>資金結餘</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
       '<div class="btn-row"><button class="btn-primary" id="restart-btn">重新挑戰</button></div>';
 
     app.innerHTML = html;
