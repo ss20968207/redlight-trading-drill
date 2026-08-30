@@ -567,7 +567,9 @@
 
   function renderFinished() {
     var summary = summarizeGame(state.outcomes);
-    var passed = summary.accuracyPercent > 50;
+    // Pass bar matches this rule combo's real historical win rate (~70%), so "passing" the
+    // quiz means reading price action about as well as the actual strategy does.
+    var passed = summary.accuracyPercent >= 70;
     var rows = state.outcomes.map(function (o, i) {
       return "<tr><td class=\"dim\">" + (i + 1) + "</td>" +
         "<td class=\"dim\">" + CATEGORY_LABELS[o.round.category] + "</td>" +
